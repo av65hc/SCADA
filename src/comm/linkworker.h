@@ -3,11 +3,12 @@
 
 #include <QObject>
 #include <QThread>
+#include <QMutex>
+#include <QWaitCondition>
+#include <atomic>
 #include <QDateTime>
 #include "../entity/deviceentity.h"
-#include "../utils/threadqueue.h"
 
-//单条通信链路采集数据，上报给UI的结构体
 struct CollectDataItem
 {
     QString devUuid;
@@ -22,25 +23,29 @@ class LinkWorker : public QObject
     Q_OBJECT
 public:
     explicit LinkWorker(QObject *parent = nullptr);
-    ~LinkWorker();
+    ~LinkWorker() override;
 
-    //设置本链路下所有从站设备
+    // 同一串口下的全部设备
     void setDeviceList(const QVector<DeviceEntity>& devList);
+    QString getPortParam() const;
+
     void startWork();
     void stopWork();
 
 signals:
-    //采集到数据，通知UI主线程
     void sigCollectData(const CollectDataItem& item);
-    //链路状态变化：在线/离线
     void sigLinkStatus(bool online, const QString& info);
 
-public slots:
-    void run();
+private slots:
+    void slotTaskLoop();
 
 private:
     QVector<DeviceEntity> m_devList;
-    bool m_running = false;
+    std::atomic<bool> m_running{false};
+    std::atomic<bool> m_needExit{false};//销毁链路标记
+
+    QMutex m_mutex;
+    QWaitCondition m_waitCond;
 };
 
 #endif // LINKWORKER_H

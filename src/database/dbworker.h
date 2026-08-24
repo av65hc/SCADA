@@ -3,7 +3,7 @@
 
 #include <QObject>
 #include <QThread>
-#include <qvariant.h>
+#include <QVariant>
 #include "../utils/threadqueue.h"
 #include  "sqlitedb.h"
 

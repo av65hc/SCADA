@@ -13,7 +13,7 @@ DbWorker::~DbWorker()
 
 void DbWorker::pushTask(const DbTask &task)
 {
-    m_taskQueue.enqueue(task);
+    m_taskqueue.enqueue(task);
 }
 
 void DbWorker::run()
@@ -22,13 +22,13 @@ void DbWorker::run()
     qDebug()<<"DbWorker线程启动";
     while(m_running)
     {
-        auto task = m_taskQueue.dequeue();
+        auto task = m_taskqueue.dequeue();
         if(!m_running) break;
 
         QSqlQuery q(m_db->m_db); //数据库连接只在本线程使用
 
         switch (task.type) {
-        case TASK_INSERT_HISTORY:
+        case insert_history:
         {
             HistoryDataPayload payload = task.data.value<HistoryDataPayload>();
             q.prepare(R"(INSERT INTO t_history(devUuid,regName,value,collectTime) VALUES(?,?,?,?))");
@@ -42,7 +42,7 @@ void DbWorker::run()
             }
             break;
         }
-        case TASK_INSERT_ALARM:
+        case insert_alarm:
         {
             AlarmPayload payload = task.data.value<AlarmPayload>();
             q.prepare(R"(INSERT INTO t_alarm(devUuid,devName,regName,value,threshold,alarmType,occurTime,isConfirm)
@@ -60,10 +60,10 @@ void DbWorker::run()
             }
             break;
         }
-        case TASK_QUERY_ALARM:
+        case query_alarm:
             //后续UI报警页面再实现
             break;
-        case TASK_QUERY_HISTORY:
+        case query_history:
             //后续历史查询页面实现
             break;
         default:
