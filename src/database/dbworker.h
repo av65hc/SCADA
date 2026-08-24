@@ -14,10 +14,36 @@ enum DbtaskType{
     query_history
 };
 
-struct Dbtask{
+//历史数据任务载荷
+struct HistoryDataPayload
+{
+    QString devUuid;
+    QString regName;
+    double value;
+    QDateTime collectTime;
+};
+
+//报警任务载荷
+struct AlarmPayload
+{
+    QString devUuid;
+    QString devName;
+    QString regName;
+    double value;
+    double threshold;
+    QString alarmType;
+    QDateTime occurTime;
+};
+
+//真正的数据库操作（增删改查）
+struct DbTask{
     DbtaskType type;
     QVariant data;
 };
+
+Q_DECLARE_METATYPE(HistoryDataPayload)
+Q_DECLARE_METATYPE(AlarmPayload)
+
 
 class DbWorker : public QObject
 {
@@ -26,14 +52,14 @@ public:
     explicit DbWorker(SqliteDb *db);
     ~DbWorker();
 
-    void pushTask(const Dbtask &task);
+    void pushTask(const DbTask &task);
 
 public slots:
     void run();
 
 private:
     SqliteDb *m_db = nullptr;
-    ThreadQueue<Dbtask> m_taskqueue;
+    ThreadQueue<DbTask> m_taskqueue;
     bool m_running = false;
 };
 
@@ -42,7 +68,7 @@ class DbworkerThread : public QThread{
 public:
     explicit DbworkerThread(SqliteDb *db);
     ~DbworkerThread();
-    void pushTask(const Dbtask &t);
+    void pushTask(const DbTask &t);
 protected:
     void run() override;
 private:
