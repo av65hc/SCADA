@@ -49,25 +49,24 @@ class DbWorker : public QObject
 {
     Q_OBJECT
 public:
-    explicit DbWorker(SqliteDb *db);
+    explicit DbWorker(const QString &dbPath);
     ~DbWorker();
 
     void pushTask(const DbTask &task);
-
-public slots:
+    void stop();
     void run();
 
 private:
-    SqliteDb *m_db = nullptr;
+    SqliteDb m_db;
     ThreadQueue<DbTask> m_taskqueue;
-    bool m_running = false;
+    QString m_dbPath;
 };
 
-class DbworkerThread : public QThread{
+class DbWorkerThread : public QThread{
     Q_OBJECT
 public:
-    explicit DbworkerThread(SqliteDb *db);
-    ~DbworkerThread();
+    explicit DbWorkerThread(const QString &dbPath);
+    ~DbWorkerThread();
     void pushTask(const DbTask &t);
 protected:
     void run() override;

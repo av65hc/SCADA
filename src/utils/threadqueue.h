@@ -26,7 +26,7 @@ public:
         while(m_queue.isEmpty() && !m_stopped){
             m_wait.wait(&m_mutex);
         }
-        if(m_queue.isEmpty){
+        if(m_queue.isEmpty()){
             return false;
         }
         out = m_queue.dequeue();

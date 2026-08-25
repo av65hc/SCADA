@@ -1,8 +1,7 @@
 #include "dbworker.h"
 #include <QDebug>
 
-DbWorker::DbWorker(SqliteDb *db)
-    : m_db(db)
+DbWorker::DbWorker(const QString &dbPath): m_dbPath(dbPath)
 {
 }
 
@@ -18,14 +17,15 @@ void DbWorker::pushTask(const DbTask &task)
 
 void DbWorker::run()
 {
-    m_running = true;
-    qDebug()<<"DbWorker线程启动";
-    while(m_running)
+    if(!m_db.openDb(m_dbPath)){
+        qCritical()<<"DbWorker线程打开数据库失败："<<m_dbPath;
+        return;
+    }
+    qDebug()<<"DbWorker线程启动，数据库就绪";
+    DbTask task;
+    while(m_taskqueue.dequeue(task))
     {
-        auto task = m_taskqueue.dequeue();
-        if(!m_running) break;
-
-        QSqlQuery q(m_db->m_db); //数据库连接只在本线程使用
+        QSqlQuery q(m_db.database());
 
         switch (task.type) {
         case insert_history:
@@ -74,18 +74,19 @@ void DbWorker::run()
 }
 
 
-DbWorkerThread::DbWorkerThread(SqliteDb *db)
+DbWorkerThread::DbWorkerThread(const QString &dbPath)
 {
-    m_worker = new DbWorker(db);
+    m_worker = new DbWorker(dbPath);
 }
 
 DbWorkerThread::~DbWorkerThread()
 {
     if(isRunning())
     {
-        m_worker->pushTask({});
-        quit();
-        wait();
+        if (m_worker) m_worker->stop();   // ① 唤醒任务循环，让它退出
+        wait();                           // ② 等 run() 真正返回（线程结束）
+        delete m_worker;                  // ③ 线程结束后才安全删除
+        m_worker = nullptr;
     }
     delete m_worker;
 }

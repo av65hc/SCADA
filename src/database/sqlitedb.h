@@ -18,7 +18,7 @@ public:
     bool openDb(const QString& dbFilePath);
     void closeDb();
     bool isOpen() const;
-
+    QSqlDatabase database() const { return m_db; }
     // 执行建表，open成功后调用
     bool createTables();
 
