@@ -22,8 +22,11 @@ signals:
     void sigCollectData(const CollectDataItem& item);
 
 private:
-    //QPointer：对象销毁自动置nullptr，解决裸指针野指针
-    QVector<QPointer<LinkWorker>> m_workerList;
+    struct WorkerInfo {
+        QPointer<LinkWorker> worker;   // QPointer：对象销毁自动置 null，防野指针
+        QPointer<QThread>   thread;
+    };
+    QVector<WorkerInfo> m_workerList;
 };
 
 #endif // LINKMANAGER_H

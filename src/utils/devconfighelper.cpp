@@ -27,6 +27,7 @@ QJsonObject deviceToJson(const DeviceEntity& dev)
         ro["len"] = reg.len;
         ro["lowAlarm"] = reg.lowAlarm;
         ro["highAlarm"] = reg.highAlarm;
+        ro["dataType"] = static_cast<int>(reg.dataType);
         regArr.append(ro);
     }
     obj["regList"] = regArr;
@@ -53,6 +54,7 @@ DeviceEntity jsonToDevice(const QJsonObject& obj)
         reg.len = ro["len"].toInt(1);
         reg.lowAlarm = ro["lowAlarm"].toDouble();
         reg.highAlarm = ro["highAlarm"].toDouble();
+        reg.dataType = static_cast<DataType>(ro["dataType"].toInt());
         dev.regList.push_back(reg);
     }
     return dev;

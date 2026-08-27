@@ -124,3 +124,29 @@ int ModbusMaster::writeSingleReg(int slaveId,int addr, uint16_t value){
     reply->deleteLater();
     return err;
 }
+
+double ModbusMaster::decodeValue(const QVector<uint16_t>& raw,DataType type){
+    if(raw.isEmpty()) return 0.0;
+    switch(type){
+    case DataType::Int16:
+        return static_cast<double>(static_cast<int16_t>(raw[0]));
+    case DataType::UInt16:
+        return static_cast<double>(static_cast<uint16_t>(raw[0]));
+    case DataType::Int32:
+    case DataType::UInt32:
+    case DataType::Float32:{
+        if(raw.size() < 2) return 0.0;
+        uint32_t u = (static_cast<uint32_t>(raw[0])<<16) | raw[1];
+        if(type == DataType::Int32){
+            return static_cast<double>(static_cast<int32_t>(u));
+        }
+        if(type == DataType::UInt32){
+            return static_cast<double>(u);
+        }
+        float f;
+        memcpy(&f,&u,sizeof(f));
+        return static_cast<double>(f);
+    }
+    }
+    return 0.0;
+}

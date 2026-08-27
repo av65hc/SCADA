@@ -30,7 +30,7 @@ void messageHandler(QtMsgType type, const QMessageLogContext&ctx, const QString&
 }
 }
 
-namespace logHelper{
+namespace LogHelper{
 void install(const QString& filePath){
     g_logFile.setFileName(filePath);
     g_logFile.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text);

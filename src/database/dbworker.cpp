@@ -23,7 +23,7 @@ void DbWorker::run()
     }
     qDebug()<<"DbWorker线程启动，数据库就绪";
     DbTask task;
-    while(m_taskqueue.dequeue(task))
+    while(m_running && m_taskqueue.dequeue(task))
     {
         QSqlQuery q(m_db.database());
 
@@ -73,6 +73,13 @@ void DbWorker::run()
     qDebug()<<"DbWorker线程退出";
 }
 
+void DbWorker::stop()
+{
+    m_running = false;
+    //压入一条空任务，唤醒阻塞在dequeue的线程，让它从等待中醒来
+    DbTask dummy{};
+    m_taskqueue.enqueue(dummy);
+}
 
 DbWorkerThread::DbWorkerThread(const QString &dbPath)
 {
@@ -81,14 +88,13 @@ DbWorkerThread::DbWorkerThread(const QString &dbPath)
 
 DbWorkerThread::~DbWorkerThread()
 {
-    if(isRunning())
+    if (m_worker)
     {
-        if (m_worker) m_worker->stop();   // ① 唤醒任务循环，让它退出
-        wait();                           // ② 等 run() 真正返回（线程结束）
-        delete m_worker;                  // ③ 线程结束后才安全删除
+        m_worker->stop();
+        wait();
+        delete m_worker;
         m_worker = nullptr;
     }
-    delete m_worker;
 }
 
 void DbWorkerThread::pushTask(const DbTask &t)

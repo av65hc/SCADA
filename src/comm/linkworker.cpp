@@ -17,23 +17,14 @@ void LinkWorker::setDeviceList(const QVector<DeviceEntity> &devList)
     m_devList = devList;
 }
 
-QString LinkWorker::getPortParam() const
-{
-    if(!m_devList.isEmpty())
-        return m_devList.first().portParam;
-    return "";
-}
-
 void LinkWorker::startWork()
 {
-    m_needExit = false;
     m_running = true;
 }
 
 void LinkWorker::stopWork()
 {
     m_running = false;
-    m_needExit = true;
     m_waitCond.wakeAll(); //立刻唤醒等待，消除msleep延迟
 }
 
@@ -47,40 +38,39 @@ void LinkWorker::slotTaskLoop()
         emit sigLinkStatus(false,"链路设备列表为空");
         return;
     }
-    QString portParam = m_devList.first().portParam;
+    const QString commType = m_devList.first().commType;
+    const QString portParam = m_devList.first().portParam;
+    const bool isTcp = (commType.compare("tcp", Qt::CaseInsensitive) == 0);
 
     bool openOk = master.openSerial(portParam);
     if(!openOk)
     {
-        emit sigLinkStatus(false, "串口打开失败:" + portParam);
+        emit sigLinkStatus(false, "链接失败:" + portParam);
         return;
     }
-    emit sigLinkStatus(true, "串口打开成功:"+portParam);
-
-    while(true)
+    emit sigLinkStatus(true, "链接成功:"+portParam);
+    int failRound = 0;
+    while(m_running)
     {
-        //原子标记，立刻检测退出
-        if(!m_running || m_needExit)
-            break;
+        bool anyOk = false;
 
         for(const auto& dev : m_devList)
         {
-            if(!m_running || m_needExit) break;
+            if(!m_running) break;
             if(!dev.enable) continue;
 
             for(const auto& reg : dev.regList)
             {
-                if(!m_running || m_needExit) break;
+                if(!m_running) break;
 
-                QVector<uint16_t> retData;
-                int ret = master.readHoldReg(dev.slaveId, reg.addr, reg.len, retData);
+                QVector<uint16_t> raw;
+                int ret = master.readHoldReg(dev.slaveId, reg.addr, reg.len, raw);
                 if(ret != 0)
                 {
-                    emit sigLinkStatus(false, QString("设备%1 寄存器%2读取失败").arg(dev.devName).arg(reg.addr));
                     continue;
                 }
-
-                double val = retData.at(0);
+                anyOk = true;
+                double val = ModbusMaster::decodeValue(raw,reg.dataType);
                 CollectDataItem item;
                 item.devUuid = dev.devUuid;
                 item.regName = reg.name;
@@ -89,7 +79,21 @@ void LinkWorker::slotTaskLoop()
                 emit sigCollectData(item);
             }
         }
-
+        if(!anyOk){
+            if(++failRound >= 3){
+                bool openError = master.openSerial(portParam);
+                emit sigLinkStatus(false,QString("链路中断，尝试重连：%1").arg(openError));
+                master.close();
+                openOk = isTcp ? master.openTcp(portParam) : openError;
+                if(openOk){
+                    emit sigLinkStatus(true,"重连成功"+portParam);
+                    failRound = 0;
+                }
+            }
+        }
+        else{
+            failRound = 0;
+        }
         QMutexLocker locker(&m_mutex);
         m_waitCond.wait(&m_mutex,300);
     }

@@ -60,6 +60,7 @@ private:
     SqliteDb m_db;
     ThreadQueue<DbTask> m_taskqueue;
     QString m_dbPath;
+    std::atomic<bool> m_running{true}; //增加运行标记
 };
 
 class DbWorkerThread : public QThread{

@@ -27,7 +27,6 @@ public:
 
     // 同一串口下的全部设备
     void setDeviceList(const QVector<DeviceEntity>& devList);
-    QString getPortParam() const;
 
     void startWork();
     void stopWork();
@@ -36,13 +35,12 @@ signals:
     void sigCollectData(const CollectDataItem& item);
     void sigLinkStatus(bool online, const QString& info);
 
-private slots:
+public slots:
     void slotTaskLoop();
 
 private:
     QVector<DeviceEntity> m_devList;
     std::atomic<bool> m_running{false};
-    std::atomic<bool> m_needExit{false};//销毁链路标记
 
     QMutex m_mutex;
     QWaitCondition m_waitCond;
