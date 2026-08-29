@@ -41,6 +41,9 @@ void LinkManager::loadFromDeviceList(const QVector<DeviceEntity> &devList)
         //转发采集数据信号
         connect(worker, &LinkWorker::sigCollectData,
                 this, &LinkManager::sigCollectData);
+        connect(worker, &LinkWorker::sigAlarm, this, &LinkManager::sigAlarm);
+        connect(worker, &LinkWorker::sigLinkStatus, this, &LinkManager::sigLinkStatus);
+
         LinkManager::WorkerInfo info;
         info.worker = worker;
         info.thread = th;

@@ -77,6 +77,7 @@ void LinkWorker::slotTaskLoop()
                 item.value = val;
                 item.time = QDateTime::currentDateTime();
                 emit sigCollectData(item);
+                checkAlarm(dev,reg,val);
             }
         }
         if(!anyOk){
@@ -101,4 +102,48 @@ void LinkWorker::slotTaskLoop()
     master.close();
     emit sigLinkStatus(false,"采集停止，串口关闭");
     qDebug()<<"LinkWorker采集任务退出";
+}
+
+void LinkWorker::checkAlarm(const DeviceEntity& dev, const RegisterItem& reg, double value)
+{
+    // 未配置报警阈值（两个都是 0）→ 该点不参与报警
+    if (reg.lowAlarm == 0.0 && reg.highAlarm == 0.0)
+        return;
+
+    QString key = dev.devUuid + "|" + reg.name;
+    int oldState = m_alarmState.value(key, 0);   // 0 正常 / 1 高报警 / 2 低报警
+
+    int newState = 0;
+    QString alarmType;
+    double threshold = 0.0;
+
+    if (value > reg.highAlarm) {
+        newState = 1; alarmType = "high"; threshold = reg.highAlarm;
+    } else if (value < reg.lowAlarm) {
+        newState = 2; alarmType = "low";  threshold = reg.lowAlarm;
+    }
+
+    // 状态没变（持续报警 / 持续正常）→ 不重复记录
+    if (newState == oldState)
+        return;
+
+    m_alarmState[key] = newState;
+
+    AlarmItem alarm;
+    alarm.devUuid  = dev.devUuid;
+    alarm.devName  = dev.devName;
+    alarm.regName  = reg.name;
+    alarm.value    = value;
+    alarm.occurTime = QDateTime::currentDateTime();
+
+    if (newState == 0) {
+        // 从报警恢复到正常
+        alarm.alarmType = "recover";
+        alarm.threshold = (oldState == 1) ? reg.highAlarm : reg.lowAlarm;
+    } else {
+        alarm.alarmType = alarmType;
+        alarm.threshold = threshold;
+    }
+
+    emit sigAlarm(alarm);
 }

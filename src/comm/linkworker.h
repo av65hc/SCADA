@@ -8,6 +8,7 @@
 #include <atomic>
 #include <QDateTime>
 #include "../entity/deviceentity.h"
+#include "../entity/alarmitem.h"
 
 struct CollectDataItem
 {
@@ -34,6 +35,7 @@ public:
 signals:
     void sigCollectData(const CollectDataItem& item);
     void sigLinkStatus(bool online, const QString& info);
+    void sigAlarm(const AlarmItem& alarm);
 
 public slots:
     void slotTaskLoop();
@@ -41,7 +43,8 @@ public slots:
 private:
     QVector<DeviceEntity> m_devList;
     std::atomic<bool> m_running{false};
-
+    void checkAlarm(const DeviceEntity& dev, const RegisterItem& reg, double value);
+    QHash<QString, int> m_alarmState;
     QMutex m_mutex;
     QWaitCondition m_waitCond;
 };

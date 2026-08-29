@@ -20,6 +20,8 @@ public:
 
 signals:
     void sigCollectData(const CollectDataItem& item);
+    void sigAlarm(const AlarmItem& alarm);
+    void sigLinkStatus(bool online, const QString& info);
 
 private:
     struct WorkerInfo {
