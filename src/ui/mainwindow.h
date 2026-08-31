@@ -14,6 +14,8 @@ class QAction;
 class QTableWidget;
 class QTabWidget;
 class QComboBox;
+class QDateTimeEdit;
+class QPlainTextEdit;
 
 class MainWindow : public QMainWindow
 {
@@ -31,6 +33,10 @@ private slots:
     void onAlarm(const AlarmItem& alarm);
     void onLinkStatus(bool online, const QString& info);
     void onCurveSelect(const QString& key);
+    void onQueryHistory();
+    void onHistoryResult(const HistoryResult& result);
+    void onConfirmAlarm();
+    void onRefreshLog();
 
 private:
     void setupUi();
@@ -63,6 +69,16 @@ private:
     QTableWidget* m_tableAlarm = nullptr;
     QComboBox*    m_cmbCurve = nullptr;
     QCustomPlot*  m_plot = nullptr;
+
+    // 历史查询页控件
+    QComboBox*     m_cmbHistDev = nullptr;
+    QComboBox*     m_cmbHistReg = nullptr;
+    QDateTimeEdit* m_dtStart = nullptr;
+    QDateTimeEdit* m_dtEnd = nullptr;
+    QCustomPlot*   m_plotHistory = nullptr;
+
+    // 日志页控件
+    QPlainTextEdit* m_logView = nullptr;
 };
 
 #endif // MAINWINDOW_H

@@ -42,12 +42,18 @@ void LinkWorker::slotTaskLoop()
     const QString portParam = m_devList.first().portParam;
     const bool isTcp = (commType.compare("tcp", Qt::CaseInsensitive) == 0);
 
-    bool openOk = master.openSerial(portParam);
-    if(!openOk)
-    {
-        emit sigLinkStatus(false, "链接失败:" + portParam);
-        return;
+    // 按通信类型选择 TCP / RTU，不能一律 openSerial
+    bool openOk = isTcp ? master.openTcp(portParam) : master.openSerial(portParam);
+    // 首次连接失败不退出，循环重试，直到成功或停止（否则设备后插上也无法恢复）
+    while(!openOk && m_running){
+        master.close();   // 清掉失败连接对象
+        emit sigLinkStatus(false, "链接失败，3秒后重试:" + portParam);
+        QMutexLocker locker(&m_mutex);
+        m_waitCond.wait(&m_mutex, 3000);
+        if(!m_running) return;
+        openOk = isTcp ? master.openTcp(portParam) : master.openSerial(portParam);
     }
+    if(!m_running) return;
     emit sigLinkStatus(true, "链接成功:"+portParam);
     int failRound = 0;
     while(m_running)
@@ -82,13 +88,15 @@ void LinkWorker::slotTaskLoop()
         }
         if(!anyOk){
             if(++failRound >= 3){
-                bool openError = master.openSerial(portParam);
-                emit sigLinkStatus(false,QString("链路中断，尝试重连：%1").arg(openError));
+                // 连续 3 轮全部读取失败 → 关闭旧连接后按协议重连
                 master.close();
-                openOk = isTcp ? master.openTcp(portParam) : openError;
-                if(openOk){
-                    emit sigLinkStatus(true,"重连成功"+portParam);
+                bool reOk = isTcp ? master.openTcp(portParam) : master.openSerial(portParam);
+                if(reOk){
+                    emit sigLinkStatus(true, "重连成功:" + portParam);
                     failRound = 0;
+                } else {
+                    emit sigLinkStatus(false, "重连失败:" + portParam);
+                    // failRound 不重置，下一轮继续尝试重连
                 }
             }
         }

@@ -56,11 +56,10 @@ void LinkManager::startAllLinks()
     for(auto& wp : m_workerList)
     {
         if(!wp.worker || !wp.thread) continue;
-        wp.worker->startWork();
-        QThread* th = wp.thread->thread();
-        if(th && !th->isRunning())
+        wp.worker->startWork();      // 先置运行标记 m_running=true，再启动线程
+        if(!wp.thread->isRunning())
         {
-            th->start(); //真正启动操作系统线程，拉起事件循环exec()
+            wp.thread->start();      // 启动后触发 started → slotTaskLoop
         }
     }
 }

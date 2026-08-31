@@ -10,6 +10,14 @@
 #include <QAction>
 #include <QUuid>
 #include <QDebug>
+#include <QPushButton>
+#include <QComboBox>
+#include <QDateTimeEdit>
+#include <QPlainTextEdit>
+#include <QFile>
+#include <QDateTime>
+#include <QVBoxLayout>
+#include <QHBoxLayout>
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
@@ -23,6 +31,8 @@ MainWindow::MainWindow(QWidget* parent)
     connect(&m_linkMgr, &LinkManager::sigCollectData, this, &MainWindow::onCollectData);
     connect(&m_linkMgr, &LinkManager::sigAlarm,       this, &MainWindow::onAlarm);
     connect(&m_linkMgr, &LinkManager::sigLinkStatus,  this, &MainWindow::onLinkStatus);
+    // 历史查询结果返回
+    connect(&m_dbThread, &DbWorkerThread::sigHistoryResult, this, &MainWindow::onHistoryResult);
 
     loadDevices();   // 启动时加载配置并重建链路
 }
@@ -52,7 +62,13 @@ void MainWindow::setupUi()
     m_tableAlarm->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     m_tableAlarm->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_tableAlarm->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    m_tabWidget->addTab(m_tableAlarm, "报警记录");
+    auto* btnConfirm = new QPushButton("确认选中报警");
+    auto* alarmWidget = new QWidget;
+    auto* alarmLayout = new QVBoxLayout(alarmWidget);
+    alarmLayout->addWidget(btnConfirm);
+    alarmLayout->addWidget(m_tableAlarm);
+    m_tabWidget->addTab(alarmWidget, "报警记录");
+    connect(btnConfirm, &QPushButton::clicked, this, &MainWindow::onConfirmAlarm);
 
     // Tab3: 实时曲线
     m_plot = new QCustomPlot;
@@ -71,6 +87,61 @@ void MainWindow::setupUi()
     curveLayout->addWidget(m_cmbCurve);
     curveLayout->addWidget(m_plot);
     m_tabWidget->addTab(curveWidget, "实时曲线");
+
+    // Tab4: 历史查询
+    m_cmbHistDev = new QComboBox;
+    m_cmbHistReg = new QComboBox;
+    m_dtStart = new QDateTimeEdit(QDateTime::currentDateTime().addDays(-1));
+    m_dtEnd   = new QDateTimeEdit(QDateTime::currentDateTime());
+    m_dtStart->setDisplayFormat("yyyy-MM-dd HH:mm");
+    m_dtEnd->setDisplayFormat("yyyy-MM-dd HH:mm");
+    auto* btnQuery = new QPushButton("查询");
+
+    m_plotHistory = new QCustomPlot;
+    m_plotHistory->addGraph();
+    m_plotHistory->graph(0)->setPen(QPen(QColor(40, 120, 220), 2));
+    QSharedPointer<QCPAxisTickerDateTime> ticker2(new QCPAxisTickerDateTime);
+    ticker2->setDateTimeFormat("MM-dd HH:mm");
+    m_plotHistory->xAxis->setTicker(ticker2);
+
+    auto* histTop = new QHBoxLayout;
+    histTop->addWidget(new QLabel("设备"));
+    histTop->addWidget(m_cmbHistDev);
+    histTop->addWidget(new QLabel("寄存器"));
+    histTop->addWidget(m_cmbHistReg);
+    histTop->addWidget(new QLabel("起"));
+    histTop->addWidget(m_dtStart);
+    histTop->addWidget(new QLabel("止"));
+    histTop->addWidget(m_dtEnd);
+    histTop->addWidget(btnQuery);
+
+    auto* histWidget = new QWidget;
+    auto* histLayout = new QVBoxLayout(histWidget);
+    histLayout->addLayout(histTop);
+    histLayout->addWidget(m_plotHistory);
+    m_tabWidget->addTab(histWidget, "历史查询");
+
+    // Tab5: 日志
+    m_logView = new QPlainTextEdit;
+    m_logView->setReadOnly(true);
+    auto* btnRefreshLog = new QPushButton("刷新日志");
+    auto* logWidget = new QWidget;
+    auto* logLayout = new QVBoxLayout(logWidget);
+    logLayout->addWidget(btnRefreshLog);
+    logLayout->addWidget(m_logView);
+    m_tabWidget->addTab(logWidget, "日志");
+
+    connect(btnQuery, &QPushButton::clicked, this, &MainWindow::onQueryHistory);
+    connect(btnRefreshLog, &QPushButton::clicked, this, &MainWindow::onRefreshLog);
+    connect(m_cmbHistDev, &QComboBox::currentIndexChanged, this, [this](){
+        m_cmbHistReg->clear();
+        QString uuid = m_cmbHistDev->currentData().toString();
+        for(const auto& dev : m_devices){
+            if(dev.devUuid == uuid)
+                for(const auto& reg : dev.regList)
+                    m_cmbHistReg->addItem(reg.name);
+        }
+    });
 
     auto* splitter = new QSplitter(Qt::Horizontal);
     splitter->addWidget(m_listDevices);
@@ -134,6 +205,11 @@ void MainWindow::refreshDeviceList()
             .arg(dev.portParam);
         m_listDevices->addItem(text);
     }
+
+    // 历史查询的设备下拉：显示名，data 存 uuid
+    m_cmbHistDev->clear();
+    for(const auto& dev : m_devices)
+        m_cmbHistDev->addItem(dev.devName, dev.devUuid);
 }
 
 void MainWindow::onAddDevice()
@@ -262,10 +338,15 @@ void MainWindow::addAlarmToTable(const AlarmItem& alarm)
     else if (alarm.alarmType == "low") typeText = "低报警";
     else                               typeText = "恢复";
 
-    int row = m_tableAlarm->rowCount();
     m_tableAlarm->insertRow(0);   // 插到最上面，最新报警最显眼
-    m_tableAlarm->setItem(0, 0, new QTableWidgetItem(alarm.occurTime.toString("HH:mm:ss")));
-    m_tableAlarm->setItem(0, 1, new QTableWidgetItem(alarm.devName));
+    auto* timeItem = new QTableWidgetItem(alarm.occurTime.toString("HH:mm:ss"));
+    timeItem->setData(Qt::UserRole, alarm.occurTime);   // 藏完整时间戳，确认时定位用
+    m_tableAlarm->setItem(0, 0, timeItem);
+
+    auto* devItem = new QTableWidgetItem(alarm.devName);
+    devItem->setData(Qt::UserRole, alarm.devUuid);       // 藏 uuid
+    m_tableAlarm->setItem(0, 1, devItem);
+
     m_tableAlarm->setItem(0, 2, new QTableWidgetItem(alarm.regName));
     m_tableAlarm->setItem(0, 3, new QTableWidgetItem(typeText));
     m_tableAlarm->setItem(0, 4, new QTableWidgetItem(QString::number(alarm.value)));
@@ -320,4 +401,70 @@ void MainWindow::updateCurveNow(const CollectDataItem& item)
     m_plot->xAxis->setRange(t - 60, t);
     m_plot->graph(0)->rescaleValueAxis(false, true);
     m_plot->replot();
+}
+
+void MainWindow::onQueryHistory()
+{
+    QString uuid = m_cmbHistDev->currentData().toString();
+    QString reg  = m_cmbHistReg->currentText();
+    if(uuid.isEmpty() || reg.isEmpty()){
+        QMessageBox::information(this, "提示", "请先选择设备和寄存器");
+        return;
+    }
+
+    HistoryQueryParam p;
+    p.devUuid = uuid;
+    p.regName = reg;
+    p.start   = m_dtStart->dateTime();
+    p.end     = m_dtEnd->dateTime();
+
+    DbTask task;
+    task.type = query_history;
+    task.data = QVariant::fromValue(p);
+    m_dbThread.pushTask(task);   // 结果异步经 onHistoryResult 回来
+}
+
+void MainWindow::onHistoryResult(const HistoryResult& result)
+{
+    m_plotHistory->graph(0)->data()->clear();
+    for(const auto& row : result.rows)
+        m_plotHistory->graph(0)->addData(row.timeMs / 1000.0, row.value);
+    m_plotHistory->rescaleAxes();
+    m_plotHistory->replot();
+}
+
+void MainWindow::onConfirmAlarm()
+{
+    int row = m_tableAlarm->currentRow();
+    if(row < 0){
+        QMessageBox::information(this, "提示", "请先选中要确认的报警行");
+        return;
+    }
+
+    AlarmConfirmParam p;
+    p.devUuid   = m_tableAlarm->item(row, 1)->data(Qt::UserRole).toString();
+    p.regName   = m_tableAlarm->item(row, 2)->text();
+    p.occurTime = m_tableAlarm->item(row, 0)->data(Qt::UserRole).toDateTime();
+
+    DbTask task;
+    task.type = confirm_alarm;
+    task.data = QVariant::fromValue(p);
+    m_dbThread.pushTask(task);
+
+    // 界面反馈：该行变灰
+    for(int col = 0; col < 6; ++col){
+        if(m_tableAlarm->item(row, col))
+            m_tableAlarm->item(row, col)->setForeground(QColor(120, 120, 120));
+    }
+}
+
+void MainWindow::onRefreshLog()
+{
+    QFile f("./scada.log");
+    if(f.open(QIODevice::ReadOnly)){
+        m_logView->setPlainText(QString::fromLocal8Bit(f.readAll()));
+        f.close();
+    } else {
+        m_logView->setPlainText("日志文件不存在");
+    }
 }

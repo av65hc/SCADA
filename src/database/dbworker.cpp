@@ -64,8 +64,45 @@ void DbWorker::run()
             //后续UI报警页面再实现
             break;
         case query_history:
-            //后续历史查询页面实现
+        {
+            HistoryQueryParam p = task.data.value<HistoryQueryParam>();
+            HistoryResult result;
+            result.devUuid = p.devUuid;
+            result.regName = p.regName;
+
+            q.prepare(R"(SELECT collectTime, value FROM t_history
+                         WHERE devUuid=? AND regName=? AND collectTime BETWEEN ? AND ?
+                         ORDER BY collectTime)");
+            q.addBindValue(p.devUuid);
+            q.addBindValue(p.regName);
+            q.addBindValue(p.start);
+            q.addBindValue(p.end);
+
+            if(q.exec()){
+                while(q.next()){
+                    HistoryRow row;
+                    row.timeMs = q.value(0).toDateTime().toMSecsSinceEpoch();
+                    row.value  = q.value(1).toDouble();
+                    result.rows.append(row);
+                }
+            } else {
+                qWarning() << "查询历史失败:" << q.lastError().text();
+            }
+            emit sigHistoryResult(result);
             break;
+        }
+        case confirm_alarm:
+        {
+            AlarmConfirmParam p = task.data.value<AlarmConfirmParam>();
+            q.prepare(R"(UPDATE t_alarm SET isConfirm=1
+                         WHERE devUuid=? AND regName=? AND occurTime=?)");
+            q.addBindValue(p.devUuid);
+            q.addBindValue(p.regName);
+            q.addBindValue(p.occurTime);
+            if(!q.exec())
+                qWarning() << "报警确认失败:" << q.lastError().text();
+            break;
+        }
         default:
             break;
         }
@@ -84,6 +121,9 @@ void DbWorker::stop()
 DbWorkerThread::DbWorkerThread(const QString &dbPath)
 {
     m_worker = new DbWorker(dbPath);
+    // 查询结果从 worker 线程回主线程：显式 QueuedConnection，确保 UI 在主线程更新
+    connect(m_worker, &DbWorker::sigHistoryResult,
+            this, &DbWorkerThread::sigHistoryResult, Qt::QueuedConnection);
 }
 
 DbWorkerThread::~DbWorkerThread()
