@@ -43,7 +43,7 @@ public:
     }
 private:
     mutable QMutex m_mutex;
-    QQueue<T> m_queue;
+    QQueue<T> m_queue;//ThreadQueue是加上了互斥锁和条件变量
     QWaitCondition m_wait;
     bool m_stopped = false;
 };

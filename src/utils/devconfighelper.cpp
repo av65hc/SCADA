@@ -74,7 +74,7 @@ bool saveDevices(const QVector<DeviceEntity> &devList, const QString &filePath)
         qWarning()<<"保存设备配置失败:"<<f.errorString();
         return false;
     }
-    f.write(doc.toJson(QJsonDocument::Indented));
+    f.write(doc.toJson(QJsonDocument::Indented)); //空行输出
     f.close();
     return true;
 }

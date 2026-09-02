@@ -27,14 +27,13 @@ MainWindow::MainWindow(QWidget* parent)
     setupUi();
     setupActions();
 
-    // 数据入库（Day 4 的接线，从 main.cpp 搬到这里）
     connect(&m_linkMgr, &LinkManager::sigCollectData, this, &MainWindow::onCollectData);
     connect(&m_linkMgr, &LinkManager::sigAlarm,       this, &MainWindow::onAlarm);
     connect(&m_linkMgr, &LinkManager::sigLinkStatus,  this, &MainWindow::onLinkStatus);
     // 历史查询结果返回
     connect(&m_dbThread, &DbWorkerThread::sigHistoryResult, this, &MainWindow::onHistoryResult);
 
-    loadDevices();   // 启动时加载配置并重建链路
+    loadDevices();
 }
 
 MainWindow::~MainWindow() = default;
@@ -77,7 +76,7 @@ void MainWindow::setupUi()
     m_plot->xAxis->setLabel("时间");
     m_plot->yAxis->setLabel("值");
     // x 轴用时间格式（HH:mm:ss）
-    QSharedPointer<QCPAxisTickerDateTime> ticker(new QCPAxisTickerDateTime);
+    QSharedPointer<QCPAxisTickerDateTime> ticker(new QCPAxisTickerDateTime); // 创建时间刻度器智能指针
     ticker->setDateTimeFormat("HH:mm:ss");
     m_plot->xAxis->setTicker(ticker);
 
@@ -143,7 +142,7 @@ void MainWindow::setupUi()
         }
     });
 
-    auto* splitter = new QSplitter(Qt::Horizontal);
+    auto* splitter = new QSplitter(Qt::Horizontal); //splitter分割器控件
     splitter->addWidget(m_listDevices);
     splitter->addWidget(m_tabWidget);
     splitter->setStretchFactor(0, 1);
@@ -339,7 +338,7 @@ void MainWindow::addAlarmToTable(const AlarmItem& alarm)
     else                               typeText = "恢复";
 
     m_tableAlarm->insertRow(0);   // 插到最上面，最新报警最显眼
-    auto* timeItem = new QTableWidgetItem(alarm.occurTime.toString("HH:mm:ss"));
+    auto* timeItem = new QTableWidgetItem(alarm.occurTime.toString("HH:mm:ss"));//Qt:DisPlayRole
     timeItem->setData(Qt::UserRole, alarm.occurTime);   // 藏完整时间戳，确认时定位用
     m_tableAlarm->setItem(0, 0, timeItem);
 
@@ -388,8 +387,8 @@ void MainWindow::onCurveSelect(const QString& key)
         for (int i = 0; i < times.size(); ++i)
             m_plot->graph(0)->addData(times[i], vals[i]);
     }
-    m_plot->rescaleAxes();
-    m_plot->replot();
+    m_plot->rescaleAxes();//自动缩放x,y轴
+    m_plot->replot();//触发重绘
 }
 
 void MainWindow::updateCurveNow(const CollectDataItem& item)
@@ -399,7 +398,7 @@ void MainWindow::updateCurveNow(const CollectDataItem& item)
     // 滚动窗口：显示最近 60 秒
     m_plot->graph(0)->data()->removeBefore(t - 60);
     m_plot->xAxis->setRange(t - 60, t);
-    m_plot->graph(0)->rescaleValueAxis(false, true);
+    m_plot->graph(0)->rescaleValueAxis(false, true);//rescaleValue(Key)Axis(bool onlyVisibleRange = false（使用全部数据点来计算y轴范围）, bool expandOnly = false（只扩大不缩小）);
     m_plot->replot();
 }
 
